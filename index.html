@@ -90,6 +90,8 @@ textarea{min-width:0;min-height:44px;font-size:16px}
 #ls{font-size:13px;color:var(--muted)}
 .loc .prog{margin:0}
 .dist{display:inline-block;margin-left:8px;font-size:13px;color:var(--muted);white-space:nowrap}
+#cands{display:flex;flex-direction:column;gap:6px}
+#cands button{padding:11px 12px;text-align:left;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--text);font:inherit;font-size:14px;cursor:pointer}
 </style>
 </head>
 <body>
@@ -112,6 +114,7 @@ textarea{min-width:0;min-height:44px;font-size:16px}
 <div class="seg" id="lm"><button type="button" data-m="auto" class="on">Автоматично (GPS)</button><button type="button" data-m="man">Ръчно</button></div>
 <div id="la"><button type="button" class="act" id="go">Определи моята локация</button></div>
 <div class="row" id="lmn" hidden><input type="search" id="adr" placeholder="Адрес или квартал, напр. Люлин 5" aria-label="Начален адрес"><button type="button" class="act" id="fd">Търси</button></div>
+<div id="cands"></div>
 <div id="ls"></div>
 <div class="prog" id="gp" hidden><i id="gpi"></i></div>
 <button type="button" class="lnk" id="clr" hidden>Изчисти началната точка</button>
@@ -212,7 +215,7 @@ function restore(file){
 $('bk').onclick=backup;$('rs').onclick=()=>$('fl').click();
 $('fl').onchange=e=>{const f=e.target.files[0];if(f)restore(f);e.target.value=''};
 /* ====== Близост: начална точка и подреждане ====== */
-const GK='zoo-geo-v1',OKY='zoo-origin-v1';
+const GK='zoo-geo-v2',OKY='zoo-origin-v2';
 let geo={},origin=null,gbusy=false;
 try{geo=JSON.parse(localStorage.getItem(GK)||'{}')||{}}catch(e){}
 try{origin=JSON.parse(localStorage.getItem(OKY)||'null')}catch(e){}
@@ -221,10 +224,12 @@ const setLs=t=>{$('ls').textContent=t};
 const saveGeo=()=>{try{localStorage.setItem(GK,JSON.stringify(geo))}catch(e){}};
 function hav(a,b){const t=x=>x*Math.PI/180,dl=t(b[0]-a[0]),dn=t(b[1]-a[1]);const h=Math.sin(dl/2)**2+Math.cos(t(a[0]))*Math.cos(t(b[0]))*Math.sin(dn/2)**2;return 12742*Math.asin(Math.sqrt(h))}
 const fmt=d=>d<1?Math.round(d*100)*10+' м':(Math.round(d*10)/10).toString().replace('.',',')+' км';
-async function nom(q){
-  const u='https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=bg&accept-language=bg&viewbox=23.15,42.83,23.52,42.55&q='+encodeURIComponent(q);
+async function nom(q,opt={}){
+  const lim=opt.limit||1,vb=opt.free?'':'&bounded=1';
+  const u='https://nominatim.openstreetmap.org/search?format=jsonv2&limit='+lim+'&countrycodes=bg&accept-language=bg&viewbox=23.10,42.88,23.60,42.50'+vb+'&q='+encodeURIComponent(q);
   const r=await fetch(u);if(!r.ok)throw new Error('http'+r.status);
-  const j=await r.json();return j.length?[+j[0].lat,+j[0].lon]:null;
+  const j=await r.json();
+  return lim===1?(j.length?[+j[0].lat,+j[0].lon]:null):j.map(x=>({p:[+x.lat,+x.lon],name:x.display_name}));
 }
 function queries(addr){
   const c=addr.replace(/(?:^|[\s,])(?:бл|вх|ет|ап)\.\s*[^\s,]+/gi,'').replace(/,\s*(?:магазин|обект|ветеринарна|спирка)[^,]*/gi,'').replace(/,\s*(?:до|зад)(?=\s|,|$)[^,]*/gi,'').replace(/,(\s*,)+/g,',').replace(/\s+/g,' ').replace(/^[,\s]+|[,\s]+$/g,'');
@@ -294,17 +299,25 @@ $('go').onclick=()=>{
 };
 async function findManual(){
   const t=$('adr').value.trim();if(!t)return;
-  setLs('Търся адреса…');
+  const box=$('cands');box.textContent='';setLs('Търся адреса…');
   try{
-    let p=await nom(/софи/i.test(t)?t:t+', София');
-    if(!p)p=await nom(t);
-    if(!p){setLs('Не намерих този адрес. Опитай по-подробно – улица и номер или квартал.');return}
-    await setOrigin([p[0],p[1],t]);
-  }catch(e){setLs('Услугата за карти не отговаря. Опитай пак след малко.')}
+    let r=await nom(/софи/i.test(t)?t:t+', София',{limit:6});
+    if(!r.length)r=await nom(t,{limit:6,free:true});
+    if(!r.length){setLs('Не намерих този адрес. Опитай по-подробно – улица и номер, напр. „бул. Витоша 100“.');return}
+    setLs('Избери кое е твоето място:');
+    const seen=new Set();
+    r.forEach(x=>{
+      const label=x.name.split(',').slice(0,3).join(',').trim();
+      if(seen.has(label))return;seen.add(label);
+      const b=document.createElement('button');b.type='button';b.textContent=label;
+      b.onclick=()=>{box.textContent='';setOrigin([x.p[0],x.p[1],label])};
+      box.appendChild(b);
+    });
+  }catch(e){setLs('Услугата за карти не отговаря ('+(e.message||'грешка')+'). Опитай пак след малко.')}
 }
 $('fd').onclick=findManual;
 $('adr').addEventListener('keydown',e=>{if(e.key==='Enter')findManual()});
-$('clr').onclick=()=>{origin=null;try{localStorage.removeItem(OKY)}catch(e){}updLs();sortList()};
+$('clr').onclick=()=>{$('cands').textContent='';origin=null;try{localStorage.removeItem(OKY)}catch(e){}updLs();sortList()};
 $('seg').addEventListener('click',()=>{if(origin)sortList()});
 updLs();if(origin){sortList();geocodeAll()}
 /* ====== НАСТРОЙКА НА FIREBASE: попълни стойностите от Firebase конзолата ====== */
