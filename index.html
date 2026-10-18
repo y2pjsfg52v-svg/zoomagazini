@@ -79,6 +79,17 @@ textarea{min-width:0;min-height:44px;font-size:16px}
 .card .row{display:flex;gap:8px}.card .row button{flex:1}
 .card .lnk{border:0;background:none;color:var(--accent);padding:4px}
 #er{color:#e5604f;font-size:13px;min-height:1em}
+.loc{display:flex;flex-direction:column;gap:8px;margin:0 0 10px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.loc b{font-size:14px}
+.loc .seg button{flex:1;padding:10px 6px;font-size:14px}
+.loc .row{display:flex;gap:8px}
+.loc input{flex:1;min-width:0;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--text);font:inherit;font-size:16px}
+.loc .act{padding:11px 14px;border:1px solid var(--accent);border-radius:10px;background:var(--accent);color:var(--on-accent);font:inherit;font-weight:600;cursor:pointer}
+.loc #la .act{width:100%}
+.loc .lnk{border:0;background:none;color:var(--accent);padding:2px 0;font:inherit;font-size:13px;cursor:pointer;text-align:left}
+#ls{font-size:13px;color:var(--muted)}
+.loc .prog{margin:0}
+.dist{display:inline-block;margin-left:8px;font-size:13px;color:var(--muted);white-space:nowrap}
 </style>
 </head>
 <body>
@@ -96,6 +107,15 @@ textarea{min-width:0;min-height:44px;font-size:16px}
 </form>
 <div id="app" hidden><div class="tools"><button type="button" id="bk">Запази копие</button><button type="button" id="out" hidden>Изход</button><button type="button" id="rs">Върни копие</button><input type="file" id="fl" accept=".json,application/json" hidden></div>
 <p class="sub">Натисни „Не“, за да отбележиш магазина като посетен. Записвай резултат, контакт или следващи действия в бележките.</p>
+<div class="loc">
+<b>Начална точка</b>
+<div class="seg" id="lm"><button type="button" data-m="auto" class="on">Автоматично (GPS)</button><button type="button" data-m="man">Ръчно</button></div>
+<div id="la"><button type="button" class="act" id="go">Определи моята локация</button></div>
+<div class="row" id="lmn" hidden><input type="search" id="adr" placeholder="Адрес или квартал, напр. Люлин 5" aria-label="Начален адрес"><button type="button" class="act" id="fd">Търси</button></div>
+<div id="ls"></div>
+<div class="prog" id="gp" hidden><i id="gpi"></i></div>
+<button type="button" class="lnk" id="clr" hidden>Изчисти началната точка</button>
+</div>
 <div class="top"><div class="bar">
 <input type="search" id="q" placeholder="Търси по фирма или адрес…" aria-label="Търсене">
 <div class="seg" id="seg"><button data-m="all" class="on">Всички</button><button data-m="no">Непосетени</button><button data-m="yes">Посетени</button></div>
@@ -130,14 +150,14 @@ function build(){
     const td=(t,c)=>{const e=document.createElement('td');if(c)e.className=c;if(t!=null)e.textContent=t;tr.appendChild(e);return e};
     td(n,'num');
     const b=document.createElement('button');b.type='button';b.className='tog';
-    b.addEventListener('click',()=>{touched.add(n);state.v[n]=!state.v[n];paint(tr);refresh();save()});
+    b.addEventListener('click',()=>{touched.add(n);state.v[n]=!state.v[n];paint(tr);refresh();save();if(origin){const ae=document.activeElement;if(ae&&ae.tagName==='TEXTAREA')ae.blur();sortList();if(origin[2]==='моята локация')$('go').click()}});
     td(null,'tg').appendChild(b);
     td(name,'nm');
     const ad=td(null,'ad'),a=document.createElement('a'),s=document.createElement('span');
     a.className='nav';a.target='_blank';a.rel='noopener';
     a.href='https://waze.com/ul?q='+encodeURIComponent(addr+', София, България')+'&navigate=yes';
     a.setAttribute('aria-label','Навигация с Waze до '+addr);
-    a.append(addr+' ');s.textContent='Waze';a.appendChild(s);ad.appendChild(a);
+    a.append(addr+' ');s.textContent='Waze';a.appendChild(s);const ds=document.createElement('small');ds.className='dist';a.appendChild(ds);ad.appendChild(a);
     const t=document.createElement('textarea');t.rows=1;t.placeholder='Добави бележка…';
     t.addEventListener('input',()=>{touched.add(n);state.n[n]=t.value;grow(t);save()});
     td(null,'nt').appendChild(t);
@@ -191,6 +211,102 @@ function restore(file){
 }
 $('bk').onclick=backup;$('rs').onclick=()=>$('fl').click();
 $('fl').onchange=e=>{const f=e.target.files[0];if(f)restore(f);e.target.value=''};
+/* ====== Близост: начална точка и подреждане ====== */
+const GK='zoo-geo-v1',OKY='zoo-origin-v1';
+let geo={},origin=null,gbusy=false;
+try{geo=JSON.parse(localStorage.getItem(GK)||'{}')||{}}catch(e){}
+try{origin=JSON.parse(localStorage.getItem(OKY)||'null')}catch(e){}
+const sleep=ms=>new Promise(r=>setTimeout(r,window.__GEO_DELAY??ms));
+const setLs=t=>{$('ls').textContent=t};
+const saveGeo=()=>{try{localStorage.setItem(GK,JSON.stringify(geo))}catch(e){}};
+function hav(a,b){const t=x=>x*Math.PI/180,dl=t(b[0]-a[0]),dn=t(b[1]-a[1]);const h=Math.sin(dl/2)**2+Math.cos(t(a[0]))*Math.cos(t(b[0]))*Math.sin(dn/2)**2;return 12742*Math.asin(Math.sqrt(h))}
+const fmt=d=>d<1?Math.round(d*100)*10+' м':(Math.round(d*10)/10).toString().replace('.',',')+' км';
+async function nom(q){
+  const u='https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=bg&accept-language=bg&viewbox=23.15,42.83,23.52,42.55&q='+encodeURIComponent(q);
+  const r=await fetch(u);if(!r.ok)throw new Error('http'+r.status);
+  const j=await r.json();return j.length?[+j[0].lat,+j[0].lon]:null;
+}
+function queries(addr){
+  const c=addr.replace(/(?:^|[\s,])(?:бл|вх|ет|ап)\.\s*[^\s,]+/gi,'').replace(/,\s*(?:магазин|обект|ветеринарна|спирка)[^,]*/gi,'').replace(/,\s*(?:до|зад)(?=\s|,|$)[^,]*/gi,'').replace(/,(\s*,)+/g,',').replace(/\s+/g,' ').replace(/^[,\s]+|[,\s]+$/g,'');
+  const b=c.replace(/(?:ж\.к\.|кв\.|ул\.|бул\.|пл\.)\s*/gi,'').replace(/№\s*\d+/g,'').replace(/\s\d+[А-Яа-яA-Za-z]?(?=,|$)/g,'').replace(/,(\s*,)+/g,',').replace(/^[,\s]+|[,\s]+$/g,'');
+  return [c+', София',b+', София'];
+}
+const dist=id=>{const g=geo[id];return(g&&origin)?hav(origin,g):Infinity};
+let pendSort=false;
+tb.addEventListener('focusout',()=>{if(pendSort){pendSort=false;setTimeout(sortList,0)}});
+function sortList(){
+  const ae=document.activeElement;if(ae&&ae.tagName==='TEXTAREA'&&tb.contains(ae)){pendSort=true;return}
+  const rows=[...tb.children];
+  rows.sort((a,b)=>{
+    const x=+a.dataset.id,y=+b.dataset.id;
+    if(!origin)return x-y;
+    const va=!!state.v[x],vb=!!state.v[y];
+    if(va!==vb)return va?1:-1;
+    const dx=dist(x),dy=dist(y);
+    if(dx===dy)return x-y;
+    return dx<dy?-1:1;
+  });
+  rows.forEach(r=>{tb.appendChild(r);const d=dist(r.dataset.id);r.querySelector('.dist').textContent=d===Infinity?'':'≈ '+fmt(d)});
+}
+function updLs(){
+  $('clr').hidden=!origin;
+  if(!origin){setLs('Избери начална точка и ще подредя непосетените от най-близките към най-далечните.');return}
+  const ok=DATA.filter(r=>geo[r[0]]).length;
+  setLs('Подредено спрямо: '+origin[2]+'. Адреси, намерени на картата: '+ok+' от '+DATA.length+'. Разстоянията са по права линия.');
+}
+async function geocodeAll(){
+  if(gbusy)return;
+  const todo=DATA.filter(r=>!(r[0] in geo));
+  if(!todo.length)return;
+  gbusy=true;$('gp').hidden=false;
+  const ac={};DATA.forEach(r=>{if(geo[r[0]]!==undefined)ac[r[2]]=geo[r[0]]});
+  let i=0,failed=false;
+  try{
+    for(const [n,,addr] of todo){
+      i++;$('gpi').style.width=(i/todo.length*100)+'%';
+      setLs('Определям адресите на картата: '+i+' от '+todo.length+'…');
+      if(addr in ac){geo[n]=ac[addr];continue}
+      let p=null;
+      for(const q of queries(addr)){p=await nom(q);await sleep(1100);if(p)break}
+      geo[n]=ac[addr]=p;
+      if(i%6===0){saveGeo();sortList()}
+    }
+  }catch(e){failed=true;setLs('Услугата за карти не отговаря. Подредени са само вече намерените адреси – опитай пак по-късно.')}
+  saveGeo();gbusy=false;$('gp').hidden=true;sortList();
+  if(!failed)updLs();
+}
+async function setOrigin(o){
+  origin=o;try{localStorage.setItem(OKY,JSON.stringify(o))}catch(e){}
+  updLs();sortList();await geocodeAll();
+}
+$('lm').onclick=e=>{
+  const b=e.target.closest('button');if(!b)return;
+  $('lm').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
+  $('la').hidden=b.dataset.m!=='auto';$('lmn').hidden=b.dataset.m!=='man';
+};
+$('go').onclick=()=>{
+  if(!navigator.geolocation){setLs('Този браузър не поддържа определяне на локация.');return}
+  setLs('Определям локацията ти…');
+  navigator.geolocation.getCurrentPosition(
+    p=>setOrigin([p.coords.latitude,p.coords.longitude,'моята локация']),
+    e=>setLs(e.code===1?'Нямам достъп до локацията. Разреши я за този сайт в настройките на браузъра или избери „Ръчно“.':'Не успях да определя локацията. Опитай пак или избери „Ръчно“.'),
+    {enableHighAccuracy:true,timeout:15000,maximumAge:60000});
+};
+async function findManual(){
+  const t=$('adr').value.trim();if(!t)return;
+  setLs('Търся адреса…');
+  try{
+    let p=await nom(/софи/i.test(t)?t:t+', София');
+    if(!p)p=await nom(t);
+    if(!p){setLs('Не намерих този адрес. Опитай по-подробно – улица и номер или квартал.');return}
+    await setOrigin([p[0],p[1],t]);
+  }catch(e){setLs('Услугата за карти не отговаря. Опитай пак след малко.')}
+}
+$('fd').onclick=findManual;
+$('adr').addEventListener('keydown',e=>{if(e.key==='Enter')findManual()});
+$('clr').onclick=()=>{origin=null;try{localStorage.removeItem(OKY)}catch(e){}updLs();sortList()};
+$('seg').addEventListener('click',()=>{if(origin)sortList()});
+updLs();if(origin){sortList();geocodeAll()}
 /* ====== НАСТРОЙКА НА FIREBASE: попълни стойностите от Firebase конзолата ====== */
 const FIREBASE_CONFIG={apiKey:"AIzaSyCjMjfClxWJg2lXU4zaJ-8yjVFnHIYheZs",authDomain:"zoomagazini-f8cc3.firebaseapp.com",projectId:"zoomagazini-f8cc3",appId:"1:221752103662:web:b196fe5ea4cd6d005019ff"};
 /* ============================================================================== */
