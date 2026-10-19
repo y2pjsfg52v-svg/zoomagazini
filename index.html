@@ -153,7 +153,7 @@ function build(){
     const td=(t,c)=>{const e=document.createElement('td');if(c)e.className=c;if(t!=null)e.textContent=t;tr.appendChild(e);return e};
     td(n,'num');
     const b=document.createElement('button');b.type='button';b.className='tog';
-    b.addEventListener('click',()=>{touched.add(n);state.v[n]=!state.v[n];paint(tr);refresh();save();if(origin){const ae=document.activeElement;if(ae&&ae.tagName==='TEXTAREA')ae.blur();sortList();if(origin[2]==='моята локация')$('go').click()}});
+    b.addEventListener('click',()=>{touched.add(n);state.v[n]=!state.v[n];paint(tr);refresh();save();if(origin){const ae=document.activeElement;if(ae&&ae.tagName==='TEXTAREA')ae.blur();sortList();if(origin[2]==='моята локация')locate(true)}});
     td(null,'tg').appendChild(b);
     td(name,'nm');
     const ad=td(null,'ad'),a=document.createElement('a'),s=document.createElement('span');
@@ -188,7 +188,7 @@ function save(){
   if(!store){return}
   clearTimeout(timer);
   timer=setTimeout(()=>{
-    chain=chain.then(()=>store.set({v:state.v,n:state.n})).then(()=>setStatus('Запазено в профила ти.')).catch(()=>{store=null;setStatus('Запазено само на това устройство.')});
+    chain=chain.then(()=>store.set({v:state.v,n:state.n,g:geo})).then(()=>setStatus('Запазено в профила ти.')).catch(()=>{store=null;setStatus('Запазено само на това устройство.')});
   },700);
 }
 $('q').addEventListener('input',refresh);
@@ -231,12 +231,64 @@ async function nom(q,opt={}){
   const j=await r.json();
   return lim===1?(j.length?[+j[0].lat,+j[0].lon]:null):j.map(x=>({p:[+x.lat,+x.lon],name:x.display_name}));
 }
-function queries(addr){
-  const c=addr.replace(/(?:^|[\s,])(?:бл|вх|ет|ап)\.\s*[^\s,]+/gi,'').replace(/,\s*(?:магазин|обект|ветеринарна|спирка)[^,]*/gi,'').replace(/,\s*(?:до|зад)(?=\s|,|$)[^,]*/gi,'').replace(/,(\s*,)+/g,',').replace(/\s+/g,' ').replace(/^[,\s]+|[,\s]+$/g,'');
-  const b=c.replace(/(?:ж\.к\.|кв\.|ул\.|бул\.|пл\.)\s*/gi,'').replace(/№\s*\d+/g,'').replace(/\s\d+[А-Яа-яA-Za-z]?(?=,|$)/g,'').replace(/,(\s*,)+/g,',').replace(/^[,\s]+|[,\s]+$/g,'');
-  return [c+', София',b+', София'];
+const CITY=/софи|пловдив|варна|бургас|русе|стара загора|плевен|перник|благоевград|велико търново|шумен|добрич|сливен|хасково|кюстендил/i;
+const JUNK=/^(?:(?:бл(?:ок)?|вх(?:од)?|ет(?:аж)?|ап(?:артамент)?|офис)(?:\.\s*|\s+)\S+|(?:до|зад|срещу|пред|близо до)\s.*|магазин.*|обект.*|павилион.*|партер.*|ветеринарна.*|спирка.*|търговски.*|пазар|базар|мол|mall|park center)$/i;
+const TYPE=/^(?:ж\.?\s?к\.?|жк|кв\.?|квартал|ул\.?|улица|бул\.?|булевард|бв\.?|пл\.?|площад|гр\.?)\s*/i;
+function parts(a){
+  const s=a.replace(/[„“”"'‘’«»`´]/g,' ').replace(/№|N°|\bNo\.?(?=\s*\d)/gi,' ').replace(/\s+/g,' ').trim();
+  const out=[];
+  s.split(/[,;]/).map(x=>x.trim()).filter(Boolean).forEach(x=>{
+    if(JUNK.test(x))return;
+    if(/^\d+\s?[А-Яа-яA-Za-z]?$/.test(x)&&out.length){out[out.length-1]+=' '+x;return}
+    out.push(x);
+  });
+  return out;
 }
-const dist=id=>{const g=geo[id];return(g&&origin)?hav(origin,g):Infinity};
+function variants(a){
+  const p=parts(a);if(!p.length)return [];
+  const nt=p.map(x=>x.replace(TYPE,'').trim()).filter(Boolean);
+  const ex=p.map(x=>x.replace(/^ул\.?\s*/i,'улица ').replace(/^бул\.?\s*/i,'булевард ').replace(/^ж\.?\s?к\.?\s*/i,'жк '));
+  const v=[nt.join(', '),p.join(', '),ex.join(', '),(nt[0]||'').replace(/\s+\d+\s?[А-Яа-яA-Za-z]?$/,'')];
+  if(nt.length>1)v.push(nt.slice(1).join(', '));
+  const suf=CITY.test(a)?'':', София';
+  return [...new Set(v.map(s=>s.trim()).filter(Boolean))].map(s=>s+suf);
+}
+let road=null,roadBusy=false,roadFail=false;
+const okey=o=>o[0].toFixed(4)+','+o[1].toFixed(4);
+const roadOk=()=>!!(road&&origin&&road.key===okey(origin));
+const dist=id=>{const g=geo[id];if(!g||!origin)return Infinity;if(roadOk())return road.d[id]!==undefined?road.d[id]:hav(origin,g)*1.35;return hav(origin,g)};
+async function roadMatrix(){
+  if(!origin)return false;
+  const o=origin,key=okey(o),ids=DATA.map(r=>r[0]).filter(n=>geo[n]);
+  if(!ids.length)return false;
+  if(road&&road.key===key&&ids.every(n=>road.d[n]!==undefined))return true;
+  const hosts=['https://router.project-osrm.org','https://routing.openstreetmap.de/routed-car'],d={};
+  for(let i=0;i<ids.length;i+=98){
+    const chunk=ids.slice(i,i+98),coords=[o,...chunk.map(n=>geo[n])].map(c=>c[1].toFixed(5)+','+c[0].toFixed(5)).join(';');
+    let res=null;
+    for(const h of hosts){
+      try{
+        const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),9000);
+        const r=await fetch(h+'/table/v1/driving/'+coords+'?sources=0&annotations=distance',{signal:ctl.signal});clearTimeout(tm);
+        if(!r.ok)continue;
+        const j=await r.json();
+        if(j.code==='Ok'&&j.distances&&j.distances[0]){res=j.distances[0];break}
+      }catch(e){}
+    }
+    if(!res)return false;
+    chunk.forEach((n,k)=>{const m=res[k+1];d[n]=m==null?hav(o,geo[n])*1.35:m/1000});
+  }
+  if(!origin||okey(origin)!==key)return null;
+  road={key,d};return true;
+}
+async function refreshRoad(){
+  if(!origin||roadBusy)return;
+  roadBusy=true;roadFail=false;updLs();
+  const ok=await roadMatrix();
+  roadBusy=false;
+  if(ok===null){refreshRoad();return}
+  roadFail=!ok;updLs();sortList();
+}
 let pendSort=false;
 tb.addEventListener('focusout',()=>{if(pendSort){pendSort=false;setTimeout(sortList,0)}});
 function sortList(){
@@ -257,76 +309,111 @@ function updLs(){
   $('clr').hidden=!origin;
   if(!origin){setLs('Избери начална точка и ще подредя непосетените от най-близките към най-далечните.');return}
   const ok=DATA.filter(r=>geo[r[0]]).length;
-  setLs('Подредено спрямо: '+origin[2]+'. Адреси, намерени на картата: '+ok+' от '+DATA.length+'. Разстоянията са по права линия.');
+  const how=roadOk()?'Разстоянията са по пътищата с кола.':roadBusy?'Изчислявам разстоянията по пътищата…':roadFail?'Не успях да изчисля пътищата – показвам разстояния по права линия.':'Разстоянията са по права линия.';
+  setLs('Подредено спрямо: '+origin[2]+'. Адреси, намерени на картата: '+ok+' от '+DATA.length+'. '+how);
+}
+async function pho(q){
+  const u='https://photon.komoot.io/api/?limit=3&bbox=23.10,42.50,23.60,42.88&lat=42.6977&lon=23.3219&q='+encodeURIComponent(q);
+  const r=await fetch(u);if(!r.ok)throw new Error('http'+r.status);
+  const j=await r.json(),words=q.toLowerCase().replace(/,\s*софия\s*$/,'').split(/[\s,]+/).filter(w=>w.length>=4&&!/\d/.test(w)&&!/^(улица|булевард|площад|квартал)$/.test(w));
+  for(const f of (j.features||[])){
+    const blob=JSON.stringify(f.properties||{}).toLowerCase(),c=f.geometry&&f.geometry.coordinates;
+    if(c&&(!words.length||words.some(w=>blob.includes(w.slice(0,Math.max(4,w.length-2))))))return [c[1],c[0]];
+  }
+  return null;
 }
 async function geocodeAll(){
   if(gbusy)return;
-  const todo=DATA.filter(r=>!(r[0] in geo));
+  const todo=DATA.filter(r=>geo[r[0]]===undefined||geo[r[0]]===null);
   if(!todo.length)return;
   gbusy=true;$('gp').hidden=false;
-  const ac={};DATA.forEach(r=>{if(geo[r[0]]!==undefined)ac[r[2]]=geo[r[0]]});
-  let i=0,failed=false;
+  const ac={};DATA.forEach(r=>{if(geo[r[0]])ac[r[2]]=geo[r[0]]});
+  const by=new Map();
+  todo.forEach(([n,,a])=>{if(ac[a])geo[n]=ac[a];else{if(!by.has(a))by.set(a,[]);by.get(a).push(n)}});
+  const jobs=[...by],total=jobs.length,miss=[];let done=0,k=0,dead=false,failed=false;
+  const upd=()=>{$('gpi').style.width=(done/Math.max(total,1)*100)+'%';setLs('Определям адресите на картата: '+done+' от '+total+'…')};
+  const put=(ids,p)=>ids.forEach(n=>{geo[n]=p});
+  upd();
+  const worker=async()=>{
+    while(!dead&&k<jobs.length){
+      const [addr,ids]=jobs[k++];let p=null;
+      try{for(const q of variants(addr)){p=await pho(q);if(p)break}}
+      catch(e){dead=true;miss.push([addr,ids]);return}
+      if(p){put(ids,p);done++;upd();if(done%8===0){saveGeo();sortList()}}else miss.push([addr,ids]);
+    }
+  };
+  await Promise.all(Array.from({length:6},worker));
+  while(k<jobs.length)miss.push(jobs[k++]);
   try{
-    for(const [n,,addr] of todo){
-      i++;$('gpi').style.width=(i/todo.length*100)+'%';
-      setLs('Определям адресите на картата: '+i+' от '+todo.length+'…');
-      if(addr in ac){geo[n]=ac[addr];continue}
+    for(const [addr,ids] of miss){
       let p=null;
-      for(const q of queries(addr)){p=await nom(q);await sleep(1100);if(p)break}
-      geo[n]=ac[addr]=p;
-      if(i%6===0){saveGeo();sortList()}
+      for(const q of variants(addr)){p=await nom(q);await sleep(1100);if(p)break}
+      put(ids,p||0);done++;upd();
+      if(done%6===0){saveGeo();sortList()}
     }
   }catch(e){failed=true;setLs('Услугата за карти не отговаря. Подредени са само вече намерените адреси – опитай пак по-късно.')}
-  saveGeo();gbusy=false;$('gp').hidden=true;sortList();
+  saveGeo();save();gbusy=false;$('gp').hidden=true;sortList();
   if(!failed)updLs();
+  refreshRoad();
 }
-async function setOrigin(o){
+async function setOrigin(o,quiet){
   origin=o;try{localStorage.setItem(OKY,JSON.stringify(o))}catch(e){}
-  updLs();sortList();await geocodeAll();
+  if(!quiet){updLs();sortList()}
+  await geocodeAll();
+  await refreshRoad();
 }
 $('lm').onclick=e=>{
   const b=e.target.closest('button');if(!b)return;
   $('lm').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
   $('la').hidden=b.dataset.m!=='auto';$('lmn').hidden=b.dataset.m!=='man';
 };
-$('go').onclick=()=>{
-  if(!navigator.geolocation){setLs('Този браузър не поддържа определяне на локация.');return}
-  setLs('Определям локацията ти…');
+const kmd=(a,b)=>{const t=x=>x*Math.PI/180,dl=t(b[0]-a[0]),dn=t(b[1]-a[1]),x=Math.sin(dl/2)**2+Math.cos(t(a[0]))*Math.cos(t(b[0]))*Math.sin(dn/2)**2;return 12742*Math.asin(Math.sqrt(x))};
+function locate(silent){
+  if(!navigator.geolocation){if(!silent)setLs('Този браузър не поддържа определяне на локация.');return}
+  if(!silent)setLs('Определям локацията ти…');
   navigator.geolocation.getCurrentPosition(
-    p=>setOrigin([p.coords.latitude,p.coords.longitude,'моята локация']),
-    e=>setLs(e.code===1?'Нямам достъп до локацията. Разреши я за този сайт в настройките на браузъра или избери „Ръчно“.':'Не успях да определя локацията. Опитай пак или избери „Ръчно“.'),
-    {enableHighAccuracy:true,timeout:15000,maximumAge:60000});
-};
+    p=>{const o=[p.coords.latitude,p.coords.longitude,'моята локация'];if(silent&&origin&&origin[2]==='моята локация'&&kmd(origin,o)<0.03)return;setOrigin(o,silent)},
+    e=>{if(!silent)setLs(e.code===1?'Нямам достъп до локацията. Разреши я за този сайт в настройките на браузъра или избери „Ръчно“.':'Не успях да определя локацията. Опитай пак или избери „Ръчно“.')},
+    {enableHighAccuracy:false,timeout:silent?6000:10000,maximumAge:silent?20000:120000});
+}
+$('go').onclick=()=>locate(false);
 async function findManual(){
   const t=$('adr').value.trim();if(!t)return;
-  const box=$('cands');box.textContent='';setLs('Търся адреса…');
+  const box=$('cands');box.textContent='';
+  const m=t.match(/^(-?\d{1,2}[.,]\d+)\s*[,;\s]\s*(-?\d{1,3}[.,]\d+)$/);
+  if(m){await setOrigin([+m[1].replace(',','.'),+m[2].replace(',','.'),'координати '+t]);return}
+  setLs('Търся адреса…');
   try{
-    let r=await nom(/софи/i.test(t)?t:t+', София',{limit:6});
-    if(!r.length)r=await nom(t,{limit:6,free:true});
-    if(!r.length){setLs('Не намерих този адрес. Опитай по-подробно – улица и номер, напр. „бул. Витоша 100“.');return}
+    const vs=variants(t);let r=[],first=true;
+    for(const bound of [true,false]){
+      for(const q of (bound?vs:vs.slice(0,2))){
+        if(!first)await sleep(1100);first=false;
+        r=await nom(q,{limit:6,free:!bound});
+        if(r.length)break;
+      }
+      if(r.length)break;
+    }
+    if(!r.length){setLs('Не намерих този адрес. Пробвах няколко начина на изписване. Махни номера, добави квартал или въведи координати, напр. 42.6977, 23.3219.');return}
+    const seen=new Set(),list=[];
+    r.forEach(x=>{const label=x.name.split(',').slice(0,3).join(',').trim();if(!seen.has(label)){seen.add(label);list.push({p:x.p,label})}});
+    if(list.length===1){await setOrigin([list[0].p[0],list[0].p[1],list[0].label]);return}
     setLs('Избери кое е твоето място:');
-    const seen=new Set();
-    r.forEach(x=>{
-      const label=x.name.split(',').slice(0,3).join(',').trim();
-      if(seen.has(label))return;seen.add(label);
-      const b=document.createElement('button');b.type='button';b.textContent=label;
-      b.onclick=()=>{box.textContent='';setOrigin([x.p[0],x.p[1],label])};
-      box.appendChild(b);
-    });
+    list.forEach(x=>{const b=document.createElement('button');b.type='button';b.textContent=x.label;b.onclick=()=>{box.textContent='';setOrigin([x.p[0],x.p[1],x.label])};box.appendChild(b)});
   }catch(e){setLs('Услугата за карти не отговаря ('+(e.message||'грешка')+'). Опитай пак след малко.')}
 }
 $('fd').onclick=findManual;
 $('adr').addEventListener('keydown',e=>{if(e.key==='Enter')findManual()});
 $('clr').onclick=()=>{$('cands').textContent='';origin=null;try{localStorage.removeItem(OKY)}catch(e){}updLs();sortList()};
 $('seg').addEventListener('click',()=>{if(origin)sortList()});
-updLs();if(origin){sortList();geocodeAll()}
+updLs();if(origin)sortList();
+function startGeo(){if(origin){sortList();geocodeAll().then(refreshRoad)}}
 /* ====== НАСТРОЙКА НА FIREBASE: попълни стойностите от Firebase конзолата ====== */
 const FIREBASE_CONFIG={apiKey:"AIzaSyCjMjfClxWJg2lXU4zaJ-8yjVFnHIYheZs",authDomain:"zoomagazini-f8cc3.firebaseapp.com",projectId:"zoomagazini-f8cc3",appId:"1:221752103662:web:b196fe5ea4cd6d005019ff"};
 /* ============================================================================== */
 const FBV='10.14.1',FB='https://www.gstatic.com/firebasejs/'+FBV+'/';
 function hasLocal(){return Object.keys(state.v).length||Object.keys(state.n).length}
 function resetLocal(){state.v={};state.n={};touched.clear();try{localStorage.removeItem(LS);localStorage.removeItem('zoo-uid')}catch(e){}tb.querySelectorAll('tr').forEach(paint);refresh()}
-function localMode(why){$('who').textContent='Локален режим';setStatus(why+' Данните са само на това устройство – ползвай „Запази копие“.');$('app').hidden=false;$('out').hidden=true}
+function localMode(why){startGeo();$('who').textContent='Локален режим';setStatus(why+' Данните са само на това устройство – ползвай „Запази копие“.');$('app').hidden=false;$('out').hidden=true}
 async function initCloud(){
   if(!FIREBASE_CONFIG.apiKey){localMode('Firebase още не е настроен.');return}
   if(!/^https?:$/.test(location.protocol)){localMode('Входът работи само от интернет адрес (https), не от файл или преглед.');return}
@@ -355,14 +442,15 @@ async function initCloud(){
       if(snap.exists()){
         const d=snap.data()||{},lv=state.v,ln=state.n;
         state.v={...(d.v||{})};state.n={...(d.n||{})};
+        if(d.g&&typeof d.g==='object'){let ch=false;for(const k in d.g){if(geo[k]===undefined||geo[k]===null){geo[k]=d.g[k];ch=true}}if(ch){saveGeo();if(origin){sortList();updLs()}}}
         touched.forEach(k=>{state.v[k]=lv[k];state.n[k]=ln[k]});
         tb.querySelectorAll('tr').forEach(paint);refresh();
         try{localStorage.setItem(LS,JSON.stringify(state))}catch(e){}
       }
-      store={set:d=>FS.setDoc(ref,d)};
+      store={set:d=>FS.setDoc(ref,d)};startGeo();
       setStatus('Данните се запазват автоматично в профила ти и се синхронизират между устройствата.');
       if(touched.size||(!snap.exists()&&hasLocal()))save();
-    }catch(e){setStatus('Няма достъп до базата данни. Провери правилата на Firestore и връзката.')}
+    }catch(e){startGeo();setStatus('Няма достъп до базата данни. Провери правилата на Firestore и връзката.')}
   });
 }
 initCloud();
