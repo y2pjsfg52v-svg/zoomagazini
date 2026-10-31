@@ -157,8 +157,10 @@ function build(){
     td(null,'tg').appendChild(b);
     td(name,'nm');
     const ad=td(null,'ad'),a=document.createElement('a'),s=document.createElement('span');
-    a.className='nav';a.target='_blank';a.rel='noopener';
-    a.href='https://waze.com/ul?q='+encodeURIComponent(addr+', София, България')+'&navigate=yes';
+    a.className='nav';
+    const wq=encodeURIComponent(addr+', София, България')+'&navigate=yes';
+    const mob=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+    if(mob){a.href='waze://?q='+wq}else{a.href='https://waze.com/ul?q='+wq;a.target='_blank';a.rel='noopener'}
     a.setAttribute('aria-label','Навигация с Waze до '+addr);
     a.append(addr+' ');s.textContent='Waze';a.appendChild(s);const ds=document.createElement('small');ds.className='dist';a.appendChild(ds);ad.appendChild(a);
     const t=document.createElement('textarea');t.rows=1;t.placeholder='Добави бележка…';
