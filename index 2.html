@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="bg">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Зоомагазини – проследяване на посещенията</title>
+<style>
+:root{--bg:#f7f8f4;--surface:#fff;--text:#1f2420;--muted:#667068;--line:#dfe3dc;--head:#edf0e8;--accent:#2f7d4f;--accent-bg:#e3f2e9;--on-accent:#fff;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#161a17;--surface:#1e2320;--text:#e8ebe6;--muted:#9aa39b;--line:#323935;--head:#262c28;--accent:#5fbf86;--accent-bg:#1f3b2c;--on-accent:#0f1a13}}
+:root[data-theme="dark"]{--bg:#161a17;--surface:#1e2320;--text:#e8ebe6;--muted:#9aa39b;--line:#323935;--head:#262c28;--accent:#5fbf86;--accent-bg:#1f3b2c;--on-accent:#0f1a13}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1100px;margin:0 auto;padding:16px 12px 24px}
+h1{font-size:20px;margin:0 0 4px}
+.sub{color:var(--muted);font-size:13px;margin:0 0 12px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.bar input[type=search]{flex:1 1 180px;min-width:0;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--text);font:inherit}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{border:0;background:var(--surface);color:var(--text);padding:9px 12px;font:inherit;cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button.on{background:var(--accent);color:var(--on-accent)}
+.stat{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);margin-bottom:4px}
+.prog{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-bottom:12px}
+.prog i{display:block;height:100%;width:0;background:var(--accent);transition:width .25s}
+.wrap{overflow:auto;max-height:68dvh;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:720px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{position:sticky;top:0;z-index:2;background:var(--head);font-size:13px;white-space:nowrap}
+td.num{color:var(--muted);width:44px}
+td.nm{font-weight:600;min-width:170px}
+tr.done td{background:var(--accent-bg)}
+.tog{min-width:56px;padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font:inherit;font-weight:600;cursor:pointer}
+tr.done .tog{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+textarea{width:100%;min-width:220px;min-height:36px;resize:none;overflow:hidden;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font:inherit}
+textarea:focus,.bar input:focus{outline:2px solid var(--accent);outline-offset:0}
+.acct{display:flex;flex-direction:column;gap:2px;margin:0 0 8px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);font-size:13px}
+.acct b{font-size:14px}
+#st{color:var(--muted)}
+.tools{display:flex;gap:8px;margin:0 0 8px}
+.tools button{flex:1;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--text);font:inherit;font-size:14px;cursor:pointer}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:10}
+.tog{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.nav{color:var(--accent);text-decoration:none;-webkit-tap-highlight-color:transparent}
+.nav span{display:inline-block;margin-left:6px;padding:2px 10px;border-radius:999px;background:var(--accent);color:var(--on-accent);font-size:12px;font-weight:600;white-space:nowrap}
+@media (max-width:700px){
+main{padding:8px 10px 32px}
+h1{font-size:18px}
+.sub{font-size:13px;margin-bottom:8px}
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding:6px 0 2px}
+.bar input[type=search]{flex:1 1 100%;font-size:16px;padding:11px 12px}
+.seg{width:100%}
+.seg button{flex:1;padding:11px 6px;font-size:15px}
+.wrap{max-height:none;overflow:visible;border:0;background:none;border-radius:0}
+table,tbody{display:block;min-width:0}
+thead{display:none}
+tr{display:grid;grid-template-columns:1fr auto;grid-template-areas:"num tog" "nm nm" "ad ad" "nt nt";gap:4px 10px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px}
+tr[hidden]{display:none}
+tr.done{background:var(--accent-bg);border-color:var(--accent)}
+td,tr.done td{display:block;padding:0;border:0;background:none;min-width:0}
+td.num{grid-area:num;align-self:center;font-size:13px;width:auto}
+td.num::before{content:"№ "}
+td.tg{grid-area:tog}
+td.nm{grid-area:nm;font-size:16px;min-width:0}
+td.ad{grid-area:ad;font-size:15px}
+.nav{display:block;padding:6px 0}
+.nav span{padding:5px 12px;font-size:13px}
+td.nt{grid-area:nt;margin-top:6px}
+.tog{min-height:42px;padding:8px 14px;font-size:15px}
+.tog::before{content:"Посетен: "}
+textarea{min-width:0;min-height:44px;font-size:16px}
+}
+[hidden]{display:none!important}
+.card{display:flex;flex-direction:column;gap:10px;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--surface);margin-bottom:12px}
+.card input{padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--text);font:inherit;font-size:16px;width:100%}
+.card button{padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--text);font:inherit;cursor:pointer}
+.card .pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
+.card .row{display:flex;gap:8px}.card .row button{flex:1}
+.card .lnk{border:0;background:none;color:var(--accent);padding:4px}
+#er{color:#e5604f;font-size:13px;min-height:1em}
+.loc{display:flex;flex-direction:column;gap:8px;margin:0 0 10px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.loc b{font-size:14px}
+.loc .seg button{flex:1;padding:10px 6px;font-size:14px}
+.loc .row{display:flex;gap:8px}
+.loc input{flex:1;min-width:0;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--text);font:inherit;font-size:16px}
+.loc .act{padding:11px 14px;border:1px solid var(--accent);border-radius:10px;background:var(--accent);color:var(--on-accent);font:inherit;font-weight:600;cursor:pointer}
+.loc #la .act{width:100%}
+.loc .lnk{border:0;background:none;color:var(--accent);padding:2px 0;font:inherit;font-size:13px;cursor:pointer;text-align:left}
+#ls{font-size:13px;color:var(--muted)}
+.loc .prog{margin:0}
+.dist{display:inline-block;margin-left:8px;font-size:13px;color:var(--muted);white-space:nowrap}
+#cands{display:flex;flex-direction:column;gap:6px}
+#cands button{padding:11px 12px;text-align:left;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--text);font:inherit;font-size:14px;cursor:pointer}
+</style>
+</head>
+<body>
+<main>
+<h1>Зоомагазини – проследяване на посещенията</h1>
+<div class="acct"><b id="who">Проверка на профила…</b><span id="st"></span></div>
+<form id="auth" class="card" hidden>
+<b>Вход в профил</b>
+<input type="email" id="em" placeholder="Имейл" autocomplete="username" required>
+<input type="password" id="pw" placeholder="Парола" autocomplete="current-password">
+<div class="row"><button type="submit" class="pri">Вход</button><button type="button" id="reg">Регистрация</button></div>
+<button type="button" id="gg">Вход с Google</button>
+<button type="button" id="fg" class="lnk">Забравена парола?</button>
+<div id="er" role="alert"></div>
+</form>
+<div id="app" hidden><div class="tools"><button type="button" id="bk">Запази копие</button><button type="button" id="out" hidden>Изход</button><button type="button" id="rs">Върни копие</button><input type="file" id="fl" accept=".json,application/json" hidden></div>
+<p class="sub">Натисни „Не“, за да отбележиш магазина като посетен. Записвай резултат, контакт или следващи действия в бележките.</p>
+<div class="loc">
+<b>Начална точка</b>
+<div class="seg" id="lm"><button type="button" data-m="auto" class="on">Автоматично (GPS)</button><button type="button" data-m="man">Ръчно</button></div>
+<div id="la"><button type="button" class="act" id="go">Определи моята локация</button></div>
+<div class="row" id="lmn" hidden><input type="search" id="adr" placeholder="Адрес или квартал, напр. Люлин 5" aria-label="Начален адрес"><button type="button" class="act" id="fd">Търси</button></div>
+<div id="cands"></div>
+<div id="ls"></div>
+<div class="prog" id="gp" hidden><i id="gpi"></i></div>
+<button type="button" class="lnk" id="clr" hidden>Изчисти началната точка</button>
+</div>
+<div class="top"><div class="bar">
+<input type="search" id="q" placeholder="Търси по фирма или адрес…" aria-label="Търсене">
+<div class="seg" id="seg"><button data-m="all" class="on">Всички</button><button data-m="no">Непосетени</button><button data-m="yes">Посетени</button></div>
+</div>
+<div class="stat"><span id="cnt"></span><span id="pct"></span></div>
+<div class="prog"><i id="pg"></i></div></div>
+<div class="wrap"><table>
+<thead><tr><th>№</th><th>Посетен?</th><th>Зоомагазин / фирма</th><th>Адрес</th><th>Описание / бележки</th></tr></thead>
+<tbody id="tb"></tbody>
+</table></div>
+
+</div></main>
+<script>
+const DATA=[[1, "ПЕТ МОЛ ООД", "ж.к. Люлин 10, бл. 103"], [2, "РУБИК 2014 ЕООД", "Кооперативен пазар Люлин"], [3, "ЗОО ДИНО ЕООД", "ж.к. Люлин, ул. Обелско шосе 20"], [4, "ЕТ АДЕЛ БОКА", "Базар, ул. Бели Дунав"], [5, "ЗООДАРГ ЕООД", "бул. Сливница 228"], [6, "ЕЛИКАН ООД", "ул. Христо Силянов 41"], [7, "ЗООДАРГ ЕООД", "бул. Тодор Каблешков 21, ж.к. Манастирски ливади"], [8, "ЗООМАКС 1250 ЕООД", "ул. Княгиня Клементина, бл. 193"], [9, "ЗООДАРГ ЕООД", "бул. Тодор Каблешков 21, ж.к. Манастирски ливади"], [10, "ЗОО ДИНО ЕООД", "ул. Суходолско езеро 5"], [11, "ЕТ ВЕНУС ЮЛИЯН ДАВИДОВ", "Овча купел, бл. 523"], [12, "ЕРМЕС 84 ЕООД", "ж.к. Овча купел 1, бл. 523, вх. Д"], [13, "ПЕТСЕНС ООД", "ул. Костенски водопад 47"], [14, "АЙ ШОП ЕООД", "ул. Хенрик Ибсен 104"], [15, "ЗОО МОЛ ООД", "ж.к. Света Троица, бл. 303"], [16, "ФЛАМБЪР ООД", "ул. Венера 1, магазин М5"], [17, "ДАРСИ ВЕТ ООД", "ул. Баба Илийца 37-43"], [18, "ЕТ ЗООПОЛИС ПОЛИНА ПЕЙЧЕВА", "ул. Пиротска 87"], [19, "БЮТИ ДОГ ЕООД", "ул. Пиротска 82"], [20, "МЕГАЗОО ООД", "бул. Александър Стамболийски 263"], [21, "ЗООМАКС 1250 ЕООД", "ул. Българска легия 2Б"], [22, "ФЛАМБЪР ООД", "ул. Екзарх Йосиф 28"], [23, "РУБИК 2014 ЕООД", "ул. Неофит Рилски 35"], [24, "ЗОО ДИНО ЕООД", "ул. Солунска 1"], [25, "ЗОО ДИНО ЕООД", "бул. Арсеналски 2, Park Center"], [26, "ПЕТСЕНС ООД", "бул. Александър Малинов 75, ж.к. Младост 3"], [27, "ЗООМАКС 1250 ЕООД", "ул. Българска легия 2Б"], [28, "ЗОО МОЛ ООД", "бул. Черни връх 100"], [29, "ЗООДАРГ ЕООД", "ул. Тодор Каблешков, спирка на тролей 2"], [30, "СЪНИЗОО ЕООД", "ул. Кишинев 1"], [31, "ДИД – ДАЯНА 2015 ЕООД", "ул. Георг Вашингтон 52"], [32, "ВЕДЕН ЕООД", "бул. Патриарх Евтимий 8"], [33, "ВЕДЕН ЕООД", "ул. Васил Петлешков 31-33"], [34, "СУРИКАТИТЕ 2020 ЕООД", "бул. Патриарх Евтимий 56"], [35, "ДАНИ 63 ЕООД", "бул. Патриарх Евтимий 56"], [36, "СУРИКАТИТЕ 2020 ЕООД", "бул. Мадрид 30"], [37, "ДАНИ 63 ЕООД", "бул. Мадрид 30"], [38, "СУРИКАТИТЕ 2020 ЕООД", "бул. Янко Сакъзов 86"], [39, "ДАНИ 63 ЕООД", "бул. Янко Сакъзов 86"], [40, "ПЕТ МОЛ ООД", "бул. Янко Сакъзов 26"], [41, "СОЛО 2017 ООД", "бул. Ситняково 39А"], [42, "СОЛО 2017 ООД", "ул. Бачо Киро 16"], [43, "СОЛО 2017 ООД", "ул. Проф. Асен Златаров 19"], [44, "АКИТА 67 ООД", "ул. Г. С. Раковски 40"], [45, "СИМБА енд КО ЕООД", "ул. Сан Стефано 9"], [46, "ЗООЛЕНД", "ул. Майор Тошев 26"], [47, "ЗОО ДИНО ЕООД", "Софийски околовръстен път 214, в.з. Симеоново"], [48, "СУРИКАТИТЕ 2020 ЕООД", "ул. Николай Коперник 25"], [49, "ДАНИ 63 ЕООД", "ул. Николай Коперник 25"], [50, "СУРИКАТИТЕ 2020 ЕООД", "пл. Велчова завера 3"], [51, "ДАНИ 63 ЕООД", "пл. Велчова завера"], [52, "ЗОО ГРУП – БГ ООД", "бул. Ботевградско шосе 555"], [53, "ЗМ ГРАНД ООД", "ул. Тодорини кукли 1А"], [54, "ВИВЕТС ЕООД", "ж.к. Суха река, бл. 225, обект 5"], [55, "ВИВЕТС ЕООД", "ж.к. Суха река, бл. 21, вх. Г"], [56, "ЛЮНЕЛ 2009 ООД", "ж.к. Банишора, бл. 40В"], [57, "ММ АКВА ГРУП", "ул. Мара Бунева 33"], [58, "ЕТ АКУРАТ ЕКСПРЕС", "ж.к. Хаджи Димитър, ул. Дончо Ватах 28"], [59, "ПЕТ МОЛ ООД", "кв. Редута, ул. Атанас Узунов 47–45"], [60, "ВЕМА – 96 ООД", "ж.к. Мусагеница, бл. 110"], [61, "ВЕМА – 96 ООД", "ул. Никола Габровски 39А"], [62, "КРИСТИЯН НГУЕН ЕООД", "ж.к. Младост 3, бл. 388, магазин 3"], [63, "ЕЛИНИ-84 ЕООД", "ж.к. Младост 3, ул. Полк. Владимир Серафимов 378, магазин 6"], [64, "ЗМ ГРАНД ООД", "ж.к. Младост 4, ул. Александър Паскалев 3"], [65, "ФЛАМБЪР ООД", "бул. Цветан Лазаров 132"], [66, "ЗОО БЪЛГАРИЯ ЕООД", "бул. Проф. Цветан Лазаров 132"], [67, "ГРУП ТРЕЙД ЕООД", "ул. Обиколна, бл. 278, магазин 3"], [68, "ГРУП ТРЕЙД ЕООД", "ж.к. Дружба, бл. 282, вх. Г, ет. 5, ап. 11"], [69, "КРИСТИАН ТРЕЙД 15 ООД", "ж.к. Дружба 1, бл. 155"], [70, "КРИСТИАН ТРЕЙД 15 ООД", "ж.к. Дружба 1, бл. 85, вх. А"], [71, "ЕКЗОТИКА 97 ЕООД", "ж.к. Дружба 2, бл. 218"], [72, "ЗОО ЗОНА БГ", "ж.к. Дружба 2, ул. Полк. Хр. Арнаудов 8"], [73, "ЛЮНЕЛ 2009 ООД", "ж.к. Дружба 2, бл. 311Б"], [74, "ВИВЕТС ЕООД", "ж.к. Дружба 2, бл. 310Б"], [75, "ФЕНИКС ВЕТ ЕООД", "ул. Константин Щъркелов, бл. 78"], [76, "ФЕНИКС ВЕТ ЕООД", "ул. Тодор Стоянов 10"], [77, "ЕСТРЕЛА – ВЕТ ООД", "ул. Иларион Драгостинов 21"], [78, "ЛЮНЕЛ 2009 ООД", "бул. Александър Малинов, магазин Билла"], [79, "ЗОО МЕНЮ ООД", "ж.к. Младост 1, ул. Йерусалим 51"], [80, "ЗОО ЗОНА БГ", "ул. Тирана, зад бл. 50"], [81, "БГПЕТ ООД", "бул. Самоковско шосе, Горубляне, до Promarket"], [82, "ЕТ ВЕГА Н ВЕРА ИЛИЕВА", "ул. Рибарица 8"], [83, "ЛЮНЕЛ 2009 ООД", "ул. Милин камък 9, ветеринарна клиника"], [84, "РИНТИ 2014", "ул. Мъдрен 27"], [85, "МОНИ ТРЕЙД 2014 ЕООД", "ж.к. Яворов, ул. Виктор Юго 22"], [86, "ДАНИ 63 ЕООД", "бул. Шипченски проход 18"], [87, "СУРИКАТИТЕ 2020 ЕООД", "бул. Шипченски проход 18"], [88, "ЗМ ГРАНД ООД", "ул. Мадрид 56"], [89, "МАГИ НАЧЕВА ООД", "ул. Станислав Доспевски 65"], [90, "ПЕТСЕНС ООД", "ул. Гео Милев 153, магазин 1"], [91, "КРИСТИЯН ТРЕЙД 15 ООД", "ул. Атанас Москов, бл. 425"], [92, "ДАНИ 63 ЕООД", "ул. Николай Коперник 25"]];
+const LS='zoo-state-v1';
+const state={v:{},n:{}},touched=new Set();
+let mode='all',store=null,timer=null,chain=Promise.resolve();
+try{const s=JSON.parse(localStorage.getItem(LS)||'null');if(s){state.v=s.v||{};state.n=s.n||{};}}catch(e){}
+const $=id=>document.getElementById(id);
+const tb=$('tb');
+function grow(t){t.style.height='auto';t.style.height=Math.max(36,t.scrollHeight)+'px'}
+function paint(tr){
+  const id=tr.dataset.id,v=!!state.v[id],b=tr.querySelector('button'),t=tr.querySelector('textarea');
+  b.textContent=v?'Да':'Не';b.setAttribute('aria-pressed',v);
+  tr.classList.toggle('done',v);
+  t.value=state.n[id]||'';grow(t);
+}
+function build(){
+  const f=document.createDocumentFragment();
+  DATA.forEach(([n,name,addr])=>{
+    const tr=document.createElement('tr');tr.dataset.id=n;tr.dataset.q=(name+' '+addr).toLowerCase();
+    const td=(t,c)=>{const e=document.createElement('td');if(c)e.className=c;if(t!=null)e.textContent=t;tr.appendChild(e);return e};
+    td(n,'num');
+    const b=document.createElement('button');b.type='button';b.className='tog';
+    b.addEventListener('click',()=>{touched.add(n);state.v[n]=!state.v[n];paint(tr);refresh();save();if(origin){const ae=document.activeElement;if(ae&&ae.tagName==='TEXTAREA')ae.blur();sortList();if(origin[2]==='моята локация')locate(true)}});
+    td(null,'tg').appendChild(b);
+    td(name,'nm');
+    const ad=td(null,'ad'),a=document.createElement('a'),s=document.createElement('span');
+    a.className='nav';
+    const wq=encodeURIComponent(addr+', София, България')+'&navigate=yes';
+    const mob=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+    if(mob){a.href='waze://?q='+wq}else{a.href='https://waze.com/ul?q='+wq;a.target='_blank';a.rel='noopener'}
+    a.setAttribute('aria-label','Навигация с Waze до '+addr);
+    a.append(addr+' ');s.textContent='Waze';a.appendChild(s);const ds=document.createElement('small');ds.className='dist';a.appendChild(ds);ad.appendChild(a);
+    const t=document.createElement('textarea');t.rows=1;t.placeholder='Добави бележка…';
+    t.addEventListener('input',()=>{touched.add(n);state.n[n]=t.value;grow(t);save()});
+    td(null,'nt').appendChild(t);
+    f.appendChild(tr);
+  });
+  tb.appendChild(f);
+  tb.querySelectorAll('tr').forEach(paint);
+}
+function refresh(){
+  const q=$('q').value.trim().toLowerCase();
+  let done=0;
+  tb.querySelectorAll('tr').forEach(tr=>{
+    const v=!!state.v[tr.dataset.id];if(v)done++;
+    const ok=(mode==='all'||(mode==='yes')===v)&&(!q||tr.dataset.q.includes(q));
+    tr.hidden=!ok;
+  });
+  const total=DATA.length;
+  $('cnt').textContent='Посетени: '+done+' от '+total;
+  $('pct').textContent=Math.round(done/total*100)+'%';
+  $('pg').style.width=(done/total*100)+'%';
+}
+function setStatus(s){$('st').textContent=s}
+function save(){
+  try{localStorage.setItem(LS,JSON.stringify(state))}catch(e){}
+  if(!store){return}
+  clearTimeout(timer);
+  timer=setTimeout(()=>{
+    chain=chain.then(()=>store.set({v:state.v,n:state.n,g:geo})).then(()=>setStatus('Запазено в профила ти.')).catch(()=>{store=null;setStatus('Запазено само на това устройство.')});
+  },700);
+}
+$('q').addEventListener('input',refresh);
+$('seg').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  mode=b.dataset.m;$('seg').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));refresh();
+});
+build();refresh();
+async function backup(){
+  const data=JSON.stringify({app:'zoomagazini',date:new Date().toISOString(),v:state.v,n:state.n},null,2);
+  const name='zoomagazini-kopie-'+new Date().toISOString().slice(0,10)+'.json';
+  try{const d=await claude.use('downloads');if(d){await d.save({filename:name,data});setStatus('Копието е запазено във файл.');return}}catch(e){}
+  try{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type:'application/json'}));a.download=name;document.body.appendChild(a);a.click();a.remove();setStatus('Копието е запазено във файл.')}catch(e){setStatus('Запазването на файл не е възможно тук.')}
+}
+function restore(file){
+  const r=new FileReader();
+  r.onload=()=>{try{
+    const d=JSON.parse(r.result);if(!d||typeof d.v!=='object'||typeof d.n!=='object')throw 0;
+    state.v={...d.v};state.n={...d.n};DATA.forEach(([n])=>touched.add(n));
+    tb.querySelectorAll('tr').forEach(paint);refresh();save();setStatus('Копието е върнато.');
+  }catch(e){setStatus('Файлът не е валидно копие от това приложение.')}};
+  r.readAsText(file);
+}
+$('bk').onclick=backup;$('rs').onclick=()=>$('fl').click();
+$('fl').onchange=e=>{const f=e.target.files[0];if(f)restore(f);e.target.value=''};
+/* ====== Близост: начална точка и подреждане ====== */
+const GK='zoo-geo-v2',OKY='zoo-origin-v2';
+let geo={},origin=null,gbusy=false;
+try{geo=JSON.parse(localStorage.getItem(GK)||'{}')||{}}catch(e){}
+const GEO_REV=4,GEO_FIX=[7,9,12,14,17,21,23,26,27,30,31,32,33,34,35,36,37,41,47,57,58,62,63,64,72,73,79,84,85];
+const fixGeo=g=>{if((g.rev||0)<GEO_REV){GEO_FIX.forEach(id=>delete g[id]);g.rev=GEO_REV}return g};
+fixGeo(geo);
+try{origin=JSON.parse(localStorage.getItem(OKY)||'null')}catch(e){}
+const sleep=ms=>new Promise(r=>setTimeout(r,window.__GEO_DELAY??ms));
+const setLs=t=>{$('ls').textContent=t};
+const saveGeo=()=>{try{localStorage.setItem(GK,JSON.stringify(geo))}catch(e){}};
+function hav(a,b){const t=x=>x*Math.PI/180,dl=t(b[0]-a[0]),dn=t(b[1]-a[1]);const h=Math.sin(dl/2)**2+Math.cos(t(a[0]))*Math.cos(t(b[0]))*Math.sin(dn/2)**2;return 12742*Math.asin(Math.sqrt(h))}
+const fmt=d=>d<1?Math.round(d*100)*10+' м':(Math.round(d*10)/10).toString().replace('.',',')+' км';
+async function nom(q,opt={}){
+  const lim=opt.limit||1,vb=opt.free?'':'&bounded=1';
+  const u='https://nominatim.openstreetmap.org/search?format=jsonv2&limit='+lim+'&countrycodes=bg&accept-language=bg&viewbox=23.10,42.88,23.60,42.50'+vb+'&q='+encodeURIComponent(q);
+  const r=await fetch(u);if(!r.ok)throw new Error('http'+r.status);
+  const j=await r.json();
+  return lim===1?(j.length?[+j[0].lat,+j[0].lon]:null):j.map(x=>({p:[+x.lat,+x.lon],name:x.display_name}));
+}
+const CITY=/софи|пловдив|варна|бургас|русе|стара загора|плевен|перник|благоевград|велико търново|шумен|добрич|сливен|хасково|кюстендил/i;
+const JUNK=/^(?:(?:бл(?:ок)?|вх(?:од)?|ет(?:аж)?|ап(?:артамент)?|офис)(?:\.\s*|\s+)\S+|(?:до|зад|срещу|пред|близо до)\s.*|магазин.*|обект.*|павилион.*|партер.*|ветеринарна.*|спирка.*|търговски.*|пазар|базар|мол|mall|park center)$/i;
+const TYPE=/^(?:ж\.?\s?к\.?|жк|кв\.?|квартал|ул\.?|улица|бул\.?|булевард|бв\.?|пл\.?|площад|гр\.?)\s*/i;
+function parts(a){
+  const s=a.replace(/[„“”"'‘’«»`´]/g,' ').replace(/№|N°|\bNo\.?(?=\s*\d)/gi,' ').replace(/\s+/g,' ').trim();
+  const out=[];
+  s.split(/[,;]/).map(x=>x.trim()).filter(Boolean).forEach(x=>{
+    if(JUNK.test(x))return;
+    if(/^\d+\s?[А-Яа-яA-Za-z]?$/.test(x)&&out.length){out[out.length-1]+=' '+x;return}
+    out.push(x);
+  });
+  return out;
+}
+function variants(a){
+  const p=parts(a);if(!p.length)return [];
+  const nt=p.map(x=>x.replace(TYPE,'').trim()).filter(Boolean);
+  const ex=p.map(x=>x.replace(/^ул\.?\s*/i,'улица ').replace(/^бул\.?\s*/i,'булевард ').replace(/^ж\.?\s?к\.?\s*/i,'жк '));
+  const v=[nt.join(', '),p.join(', '),ex.join(', '),(nt[0]||'').replace(/\s+\d+\s?[А-Яа-яA-Za-z]?$/,'')];
+  if(nt.length>1)v.push(nt.slice(1).join(', '));
+  const suf=CITY.test(a)?'':', София';
+  return [...new Set(v.map(s=>s.trim()).filter(Boolean))].map(s=>s+suf);
+}
+let road=null,roadBusy=false,roadFail=false;
+const okey=o=>o[0].toFixed(4)+','+o[1].toFixed(4);
+const roadOk=()=>!!(road&&origin&&road.key===okey(origin));
+const dist=id=>{const g=geo[id];if(!g||!origin)return Infinity;if(roadOk())return road.d[id]!==undefined?road.d[id]:hav(origin,g)*1.35;return hav(origin,g)};
+async function roadMatrix(){
+  if(!origin)return false;
+  const o=origin,key=okey(o),ids=DATA.map(r=>r[0]).filter(n=>geo[n]);
+  if(!ids.length)return false;
+  if(road&&road.key===key&&ids.every(n=>road.d[n]!==undefined))return true;
+  const hosts=['https://router.project-osrm.org','https://routing.openstreetmap.de/routed-car'],d={};
+  for(let i=0;i<ids.length;i+=98){
+    const chunk=ids.slice(i,i+98),coords=[o,...chunk.map(n=>geo[n])].map(c=>c[1].toFixed(5)+','+c[0].toFixed(5)).join(';');
+    let res=null;
+    for(const h of hosts){
+      try{
+        const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),9000);
+        const r=await fetch(h+'/table/v1/driving/'+coords+'?sources=0&annotations=distance',{signal:ctl.signal});clearTimeout(tm);
+        if(!r.ok)continue;
+        const j=await r.json();
+        if(j.code==='Ok'&&j.distances&&j.distances[0]){res=j.distances[0];break}
+      }catch(e){}
+    }
+    if(!res)return false;
+    chunk.forEach((n,k)=>{const m=res[k+1];d[n]=m==null?hav(o,geo[n])*1.35:m/1000});
+  }
+  if(!origin||okey(origin)!==key)return null;
+  road={key,d};return true;
+}
+async function refreshRoad(){
+  if(!origin||roadBusy)return;
+  roadBusy=true;roadFail=false;updLs();
+  const ok=await roadMatrix();
+  roadBusy=false;
+  if(ok===null){refreshRoad();return}
+  roadFail=!ok;updLs();sortList();
+}
+let pendSort=false;
+tb.addEventListener('focusout',()=>{if(pendSort){pendSort=false;setTimeout(sortList,0)}});
+function sortList(){
+  const ae=document.activeElement;if(ae&&ae.tagName==='TEXTAREA'&&tb.contains(ae)){pendSort=true;return}
+  const rows=[...tb.children];
+  rows.sort((a,b)=>{
+    const x=+a.dataset.id,y=+b.dataset.id;
+    if(!origin)return x-y;
+    const va=!!state.v[x],vb=!!state.v[y];
+    if(va!==vb)return va?1:-1;
+    const dx=dist(x),dy=dist(y);
+    if(dx===dy)return x-y;
+    return dx<dy?-1:1;
+  });
+  rows.forEach(r=>{tb.appendChild(r);const d=dist(r.dataset.id);r.querySelector('.dist').textContent=d===Infinity?'':'≈ '+fmt(d)});
+}
+function updLs(){
+  $('clr').hidden=!origin;
+  if(!origin){setLs('Избери начална точка и ще подредя непосетените от най-близките към най-далечните.');return}
+  const ok=DATA.filter(r=>geo[r[0]]).length;
+  const how=roadOk()?'Разстоянията са по пътищата с кола.':roadBusy?'Изчислявам разстоянията по пътищата…':roadFail?'Не успях да изчисля пътищата – показвам разстояния по права линия.':'Разстоянията са по права линия.';
+  setLs('Подредено спрямо: '+origin[2]+'. Адреси, намерени на картата: '+ok+' от '+DATA.length+'. '+how);
+}
+async function pho(q){
+  const u='https://photon.komoot.io/api/?limit=3&bbox=23.10,42.50,23.60,42.88&lat=42.6977&lon=23.3219&q='+encodeURIComponent(q);
+  const r=await fetch(u);if(!r.ok)throw new Error('http'+r.status);
+  const j=await r.json(),words=q.toLowerCase().replace(/,\s*софия\s*$/,'').split(/[\s,]+/).filter(w=>w.length>=4&&!/\d/.test(w)&&!/^(улица|булевард|площад|квартал)$/.test(w));
+  for(const f of (j.features||[])){
+    const blob=JSON.stringify(f.properties||{}).toLowerCase(),c=f.geometry&&f.geometry.coordinates;
+    if(c&&(!words.length||words.some(w=>blob.includes(w.slice(0,Math.max(4,w.length-2))))))return [c[1],c[0]];
+  }
+  return null;
+}
+async function geocodeAll(){
+  if(gbusy)return;
+  const todo=DATA.filter(r=>geo[r[0]]===undefined||geo[r[0]]===null);
+  if(!todo.length)return;
+  gbusy=true;$('gp').hidden=false;
+  const ac={};DATA.forEach(r=>{if(geo[r[0]])ac[r[2]]=geo[r[0]]});
+  const by=new Map();
+  todo.forEach(([n,,a])=>{if(ac[a])geo[n]=ac[a];else{if(!by.has(a))by.set(a,[]);by.get(a).push(n)}});
+  const jobs=[...by],total=jobs.length,miss=[];let done=0,k=0,dead=false,failed=false;
+  const upd=()=>{$('gpi').style.width=(done/Math.max(total,1)*100)+'%';setLs('Определям адресите на картата: '+done+' от '+total+'…')};
+  const put=(ids,p)=>ids.forEach(n=>{geo[n]=p});
+  upd();
+  const worker=async()=>{
+    while(!dead&&k<jobs.length){
+      const [addr,ids]=jobs[k++];let p=null;
+      try{for(const q of variants(addr)){p=await pho(q);if(p)break}}
+      catch(e){dead=true;miss.push([addr,ids]);return}
+      if(p){put(ids,p);done++;upd();if(done%8===0){saveGeo();sortList()}}else miss.push([addr,ids]);
+    }
+  };
+  await Promise.all(Array.from({length:6},worker));
+  while(k<jobs.length)miss.push(jobs[k++]);
+  try{
+    for(const [addr,ids] of miss){
+      let p=null;
+      for(const q of variants(addr)){p=await nom(q);await sleep(1100);if(p)break}
+      put(ids,p||0);done++;upd();
+      if(done%6===0){saveGeo();sortList()}
+    }
+  }catch(e){failed=true;setLs('Услугата за карти не отговаря. Подредени са само вече намерените адреси – опитай пак по-късно.')}
+  saveGeo();save();gbusy=false;$('gp').hidden=true;sortList();
+  if(!failed)updLs();
+  refreshRoad();
+}
+async function setOrigin(o,quiet){
+  origin=o;try{localStorage.setItem(OKY,JSON.stringify(o))}catch(e){}
+  if(!quiet){updLs();sortList()}
+  await geocodeAll();
+  await refreshRoad();
+}
+$('lm').onclick=e=>{
+  const b=e.target.closest('button');if(!b)return;
+  $('lm').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
+  $('la').hidden=b.dataset.m!=='auto';$('lmn').hidden=b.dataset.m!=='man';
+};
+const kmd=(a,b)=>{const t=x=>x*Math.PI/180,dl=t(b[0]-a[0]),dn=t(b[1]-a[1]),x=Math.sin(dl/2)**2+Math.cos(t(a[0]))*Math.cos(t(b[0]))*Math.sin(dn/2)**2;return 12742*Math.asin(Math.sqrt(x))};
+function locate(silent){
+  if(!navigator.geolocation){if(!silent)setLs('Този браузър не поддържа определяне на локация.');return}
+  if(!silent)setLs('Определям локацията ти…');
+  navigator.geolocation.getCurrentPosition(
+    p=>{const o=[p.coords.latitude,p.coords.longitude,'моята локация'];if(silent&&origin&&origin[2]==='моята локация'&&kmd(origin,o)<0.03)return;setOrigin(o,silent)},
+    e=>{if(!silent)setLs(e.code===1?'Нямам достъп до локацията. Разреши я за този сайт в настройките на браузъра или избери „Ръчно“.':'Не успях да определя локацията. Опитай пак или избери „Ръчно“.')},
+    {enableHighAccuracy:false,timeout:silent?6000:10000,maximumAge:silent?20000:120000});
+}
+$('go').onclick=()=>locate(false);
+async function findManual(){
+  const t=$('adr').value.trim();if(!t)return;
+  const box=$('cands');box.textContent='';
+  const m=t.match(/^(-?\d{1,2}[.,]\d+)\s*[,;\s]\s*(-?\d{1,3}[.,]\d+)$/);
+  if(m){await setOrigin([+m[1].replace(',','.'),+m[2].replace(',','.'),'координати '+t]);return}
+  setLs('Търся адреса…');
+  try{
+    const vs=variants(t);let r=[],first=true;
+    for(const bound of [true,false]){
+      for(const q of (bound?vs:vs.slice(0,2))){
+        if(!first)await sleep(1100);first=false;
+        r=await nom(q,{limit:6,free:!bound});
+        if(r.length)break;
+      }
+      if(r.length)break;
+    }
+    if(!r.length){setLs('Не намерих този адрес. Пробвах няколко начина на изписване. Махни номера, добави квартал или въведи координати, напр. 42.6977, 23.3219.');return}
+    const seen=new Set(),list=[];
+    r.forEach(x=>{const label=x.name.split(',').slice(0,3).join(',').trim();if(!seen.has(label)){seen.add(label);list.push({p:x.p,label})}});
+    if(list.length===1){await setOrigin([list[0].p[0],list[0].p[1],list[0].label]);return}
+    setLs('Избери кое е твоето място:');
+    list.forEach(x=>{const b=document.createElement('button');b.type='button';b.textContent=x.label;b.onclick=()=>{box.textContent='';setOrigin([x.p[0],x.p[1],x.label])};box.appendChild(b)});
+  }catch(e){setLs('Услугата за карти не отговаря ('+(e.message||'грешка')+'). Опитай пак след малко.')}
+}
+$('fd').onclick=findManual;
+$('adr').addEventListener('keydown',e=>{if(e.key==='Enter')findManual()});
+$('clr').onclick=()=>{$('cands').textContent='';origin=null;try{localStorage.removeItem(OKY)}catch(e){}updLs();sortList()};
+$('seg').addEventListener('click',()=>{if(origin)sortList()});
+updLs();if(origin)sortList();
+function startGeo(){if(origin){sortList();geocodeAll().then(refreshRoad)}}
+/* ====== НАСТРОЙКА НА FIREBASE: попълни стойностите от Firebase конзолата ====== */
+const FIREBASE_CONFIG={apiKey:"AIzaSyCjMjfClxWJg2lXU4zaJ-8yjVFnHIYheZs",authDomain:"zoomagazini-f8cc3.firebaseapp.com",projectId:"zoomagazini-f8cc3",appId:"1:221752103662:web:b196fe5ea4cd6d005019ff"};
+/* ============================================================================== */
+const FBV='10.14.1',FB='https://www.gstatic.com/firebasejs/'+FBV+'/';
+function hasLocal(){return Object.keys(state.v).length||Object.keys(state.n).length}
+function resetLocal(){state.v={};state.n={};touched.clear();try{localStorage.removeItem(LS);localStorage.removeItem('zoo-uid')}catch(e){}tb.querySelectorAll('tr').forEach(paint);refresh()}
+function localMode(why){startGeo();$('who').textContent='Локален режим';setStatus(why+' Данните са само на това устройство – ползвай „Запази копие“.');$('app').hidden=false;$('out').hidden=true}
+async function initCloud(){
+  if(!FIREBASE_CONFIG.apiKey){localMode('Firebase още не е настроен.');return}
+  if(!/^https?:$/.test(location.protocol)){localMode('Входът работи само от интернет адрес (https), не от файл или преглед.');return}
+  let AP,AU,FS;
+  try{[AP,AU,FS]=await Promise.all([import(FB+'firebase-app.js'),import(FB+'firebase-auth.js'),import(FB+'firebase-firestore.js')])}
+  catch(e){localMode('Firebase не се зареди – провери интернет връзката.');return}
+  const app=AP.initializeApp(FIREBASE_CONFIG),auth=AU.getAuth(app),fs=FS.getFirestore(app);
+  const em=$('em'),pw=$('pw'),er=$('er');
+  const M={'auth/invalid-credential':'Грешен имейл или парола.','auth/email-already-in-use':'Този имейл вече е регистриран.','auth/weak-password':'Паролата трябва да е поне 6 символа.','auth/invalid-email':'Невалиден имейл.','auth/missing-password':'Въведи парола.','auth/popup-closed-by-user':'Входът е отказан.','auth/network-request-failed':'Няма интернет връзка.','auth/unauthorized-domain':'Този адрес не е добавен в Authorized domains във Firebase.'};
+  const fail=e=>{er.textContent=M[e.code]||'Грешка: '+(e.code||e.message)};
+  const run=async f=>{er.textContent='';try{await f()}catch(e){fail(e)}};
+  $('auth').onsubmit=ev=>{ev.preventDefault();run(()=>AU.signInWithEmailAndPassword(auth,em.value.trim(),pw.value))};
+  $('reg').onclick=()=>run(()=>AU.createUserWithEmailAndPassword(auth,em.value.trim(),pw.value));
+  $('gg').onclick=()=>run(()=>AU.signInWithPopup(auth,new AU.GoogleAuthProvider()));
+  $('fg').onclick=()=>run(async()=>{if(!em.value.trim()){er.textContent='Първо въведи имейл.';return}await AU.sendPasswordResetEmail(auth,em.value.trim());er.textContent='Изпратихме писмо за нова парола.'});
+  $('out').onclick=async()=>{store=null;await AU.signOut(auth);resetLocal()};
+  AU.onAuthStateChanged(auth,async u=>{
+    if(!u){store=null;$('app').hidden=true;$('auth').hidden=false;$('out').hidden=true;$('who').textContent='Не си влязъл в профил';setStatus('Влез или се регистрирай, за да виждаш списъка.');return}
+    $('auth').hidden=true;$('app').hidden=false;$('out').hidden=false;
+    $('who').textContent='Влязъл си като '+(u.email||u.displayName||'')+' ✓';
+    let prev=null;try{prev=localStorage.getItem('zoo-uid');localStorage.setItem('zoo-uid',u.uid)}catch(e){}
+    if(prev&&prev!==u.uid)resetLocal();
+    const ref=FS.doc(fs,'users',u.uid);
+    try{
+      const snap=await FS.getDoc(ref);
+      if(snap.exists()){
+        const d=snap.data()||{},lv=state.v,ln=state.n;
+        state.v={...(d.v||{})};state.n={...(d.n||{})};
+        if(d.g&&typeof d.g==='object'){const dg=fixGeo({...d.g});let ch=false;for(const k in dg){if(geo[k]===undefined||geo[k]===null){geo[k]=dg[k];ch=true}}if(ch){saveGeo();if(origin){sortList();updLs()}}}
+        touched.forEach(k=>{state.v[k]=lv[k];state.n[k]=ln[k]});
+        tb.querySelectorAll('tr').forEach(paint);refresh();
+        try{localStorage.setItem(LS,JSON.stringify(state))}catch(e){}
+      }
+      store={set:d=>FS.setDoc(ref,d)};startGeo();
+      setStatus('Данните се запазват автоматично в профила ти и се синхронизират между устройствата.');
+      if(touched.size||(!snap.exists()&&hasLocal()))save();
+    }catch(e){startGeo();setStatus('Няма достъп до базата данни. Провери правилата на Firestore и връзката.')}
+  });
+}
+initCloud();
+</script>
+</body>
+</html>
